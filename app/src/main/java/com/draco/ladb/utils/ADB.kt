@@ -31,6 +31,7 @@ class ADB(private val context: Context) {
     private val sharedPrefs = PreferenceManager.getDefaultSharedPreferences(context)
 
     private val adbPath = "${context.applicationInfo.nativeLibraryDir}/libadb.so"
+    private val scriptPath = "${context.getExternalFilesDir(null)}/script.sh"
 
     /**
      * Is the shell ready to handle commands?
@@ -126,15 +127,9 @@ class ADB(private val context: Context) {
             }
 
             adb(false, listOf("start-server")).waitFor()
-
-            debug("Attempting to connect to localhost...")
-            debug("This may take a minute")
-            adb(false, listOf("connect", "localhost")).waitFor(1, TimeUnit.MINUTES)
-
             debug("Waiting for device to connect...")
             debug("This may take a minute")
             val waitProcess = adb(false, listOf("wait-for-device")).waitFor(1, TimeUnit.MINUTES)
-
             if (!waitProcess) {
                 debug("Your device didn't connect to LADB")
                 debug("If a reboot doesn't work, please contact support")
@@ -145,7 +140,12 @@ class ADB(private val context: Context) {
         }
 
         shellProcess = if (autoShell) {
-            adb(true, listOf("shell"))
+            val argList = if (Build.SUPPORTED_ABIS[0] == "arm64-v8a")
+                listOf("-t", "1", "shell")
+            else
+                listOf("shell")
+
+            adb(true, argList)
         } else {
             shell(true, listOf("sh", "-l"))
         }
@@ -215,8 +215,7 @@ class ADB(private val context: Context) {
         killShell.waitFor(3, TimeUnit.SECONDS)
         killShell.destroyForcibly()
 
-        // FIXME(tytydraco): Return true on pair because some devices might mistakenly return false here.
-        return true
+        return pairShell.exitValue() == 0
     }
 
     /**
